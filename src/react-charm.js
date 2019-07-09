@@ -108,10 +108,18 @@ export function getState() {
 }
 
 export function initState(state = {}) {
+  let nextState = context.state;
   Object.keys(state).forEach(key => {
-    if (key in context.state) return;
-    context.state[key] = state[key];
+    if (!(key in context.state)) {
+      if (nextState === context.state) {
+        nextState = {
+          ...context.state
+        };
+      }
+      nextState[key] = state[key];
+    }
   });
+  setState(nextState);
 }
 
 export function setState(nextState, notify = false, modifier) {
