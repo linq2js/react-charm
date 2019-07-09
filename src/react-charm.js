@@ -12,6 +12,20 @@ const context = {
   subscribers: {}
 };
 const callbackCache = new WeakMap();
+const stateProxy = new Proxy(
+  {},
+  {
+    get(target, name) {
+      return context.state[name];
+    },
+    ownKeys: function() {
+      return Object.keys(context.state);
+    },
+    getOwnPropertyDescriptor: function() {
+      return { enumerable: true, configurable: true };
+    }
+  }
+);
 let uniqueId = 0;
 
 export function useStates(...selectors) {
@@ -93,6 +107,13 @@ export function getState() {
   return context.state;
 }
 
+export function initState(state = {}) {
+  Object.keys(state).forEach(key => {
+    if (key in context.state) return;
+    context.state[key] = state[key];
+  });
+}
+
 export function setState(nextState, notify = false, modifier) {
   if (nextState !== context.state) {
     context.state = nextState;
@@ -166,7 +187,7 @@ function executeAction(action, ...args) {
 function executeEffect(effect, ...args) {
   return effect(
     {
-      state: context.state,
+      state: stateProxy,
       effect: executeEffect,
       action: executeAction
     },
