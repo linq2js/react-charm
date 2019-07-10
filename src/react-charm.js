@@ -1,15 +1,18 @@
 import {
+  useMemo,
   useState,
   useEffect,
   useLayoutEffect,
   useRef,
-  useCallback
+  useCallback,
+  memo,
+  createElement
 } from "react";
 import produce from "immer";
 
 const context = {
   state: {},
-  subscribers: {}
+  subscribers: new Set()
 };
 const callbackCache = new WeakMap();
 const stateProxy = new Proxy(
@@ -26,7 +29,6 @@ const stateProxy = new Proxy(
     }
   }
 );
-let uniqueId = 0;
 
 export function useStates(...selectors) {
   const isUnmountRef = useRef(false);
@@ -108,50 +110,43 @@ export function getState() {
 }
 
 export function initState(state = {}) {
-  let nextState = context.state;
-  Object.keys(state).forEach(key => {
-    if (!(key in context.state)) {
-      if (nextState === context.state) {
-        nextState = {
-          ...context.state
-        };
-      }
-      nextState[key] = state[key];
-    }
+  setState(draft => {
+    Object.keys(state).forEach(key => {
+      if (key in context.state) return;
+      draft[key] = state[key];
+    });
   });
-  setState(nextState);
 }
 
 export function setState(nextState, notify = false, modifier) {
+  if (typeof nextState === "function") {
+    nextState = produce(context.state, nextState);
+  }
   if (nextState !== context.state) {
     context.state = nextState;
     // notify change
     if (notify) {
-      for (const key in context.subscribers) {
-        if (!context.subscribers.hasOwnProperty(key)) continue;
-        context.subscribers[key](context.state, modifier);
+      for (const subscriber of context.subscribers) {
+        subscriber(context.state, modifier);
       }
     }
   }
 }
 
-export function reinitialize(newContext = {}) {
+export function reset(newContext = {}) {
   Object.assign(context, newContext);
 }
 
 export function subscribe(subscriber) {
-  if (!subscriber.__id) {
-    subscriber.__id = ++uniqueId;
-  }
-  context.subscribers[subscriber.__id] = subscriber;
+  context.subscribers.add(subscriber);
 
   return () => {
-    delete context.subscribers[subscriber.__id];
+    context.subscribers.delete(subscriber);
   };
 }
 
 export function unsubscribeAll() {
-  context.subscribers = {};
+  context.subscribers.clear();
 }
 
 export function getCallback(callback) {
@@ -169,20 +164,91 @@ export function useActions(...actions) {
   return actions.map(getCallback);
 }
 
+export function withStates(stateMap) {
+  const entries = Object.entries(stateMap);
+  return comp => {
+    const memoizedComp = memo(comp);
+    return props => {
+      const stateValues = useStates(
+        ...entries.map(([key, selector]) =>
+          typeof selector === "function"
+            ? state => selector(state, props)
+            : selector === true
+            ? key
+            : selector
+        )
+      );
+      const nextProps = {};
+      entries.forEach((entry, index) => {
+        nextProps[entry[0]] = stateValues[index];
+      });
+
+      Object.assign(nextProps, props);
+
+      return createElement(memoizedComp, nextProps);
+    };
+  };
+}
+
+export function withActions(actionMap) {
+  const entries = Object.entries(actionMap);
+  return comp => {
+    // create memoized component
+    const memoizedComp = memo(comp);
+    // return wrapped component
+    return props => {
+      const callbacks = useMemo(
+        () =>
+          entries.map(entry =>
+            getCallback((context, ...args) => {
+              context.props = props;
+              entry[1](context, ...args);
+            })
+          ),
+        [props]
+      );
+      const nextProps = {};
+      entries.forEach((entry, index) => {
+        nextProps[entry[0]] = callbacks[index];
+      });
+
+      Object.assign(nextProps, props);
+
+      return createElement(memoizedComp, nextProps);
+    };
+  };
+}
+
+export default function compose(...functions) {
+  if (functions.length === 0) {
+    return arg => arg;
+  }
+
+  if (functions.length === 1) {
+    return functions[0];
+  }
+
+  return functions.reduce((a, b) => (...args) => a(b(...args)));
+}
+
 function executeAction(action, ...args) {
   if (!context.executionContext) {
     // create new execution context
     const executionContext = (context.executionContext = {
+      props: context.props,
       action: executeAction,
       effect: executeEffect
     });
     try {
       let result = undefined;
-      const nextState = produce(context.state, draft => {
-        executionContext.state = draft;
-        result = action(executionContext, ...args);
-      });
-      setState(nextState, true, action);
+      setState(
+        draft => {
+          executionContext.state = draft;
+          result = action(executionContext, ...args);
+        },
+        true,
+        action
+      );
       return result;
     } finally {
       delete context.executionContext;
