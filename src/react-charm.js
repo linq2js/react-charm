@@ -118,7 +118,7 @@ export function initState(state = {}) {
   });
 }
 
-export function setState(nextState, notify = false, modifier) {
+export function setState(nextState, notify = true, modifier) {
   if (typeof nextState === "function") {
     nextState = produce(context.state, nextState);
   }
@@ -231,11 +231,68 @@ export default function compose(...functions) {
   return functions.reduce((a, b) => (...args) => a(b(...args)));
 }
 
+/**
+ * unlikely subscribe function, stateMutator will be called when any action dispatched
+ * on(action, stateMutator)
+ * on([action1, action2], stateMutator)
+ * on([
+ *  [action1, stateMutator1],
+ *  [action2, stateMutator2]
+ * ])
+ */
+export function on(...args) {
+  if (context.executionContext) {
+    throw new Error(
+      "Cannot register state mutator inside action calling context"
+    );
+  }
+
+  const pairs = [];
+  /**
+   * on([action1, action2], stateMutator)
+   * on(
+   *  [action1, stateMutator1],
+   *  [action2, stateMutator2]
+   * )
+   */
+  if (Array.isArray(args[0])) {
+    /**
+     * on([action1, action2], stateMutator)
+     */
+    if (typeof args[1] === "function") {
+      pairs.push(...args[0].map(action => [action, args[1]]));
+    } else {
+      /**
+       * on(
+       *  [action1, stateMutator1],
+       *  [action2, stateMutator2]
+       * )
+       */
+      pairs.push(...args[0]);
+    }
+  } else {
+    pairs.push(args);
+  }
+
+  pairs.forEach(([action, stateMutator]) => {
+    if (!action.__subscribers) {
+      action.__subscribers = new Set();
+    }
+    action.__subscribers.add(stateMutator);
+  });
+
+  return () => {
+    pairs.forEach(([action, stateMutator]) =>
+      action.__subscribers.delete(stateMutator)
+    );
+  };
+}
+
 function executeAction(action, ...args) {
   if (!context.executionContext) {
     // create new execution context
     const executionContext = (context.executionContext = {
-      props: context.props,
+      type: action,
       action: executeAction,
       effect: executeEffect
     });
@@ -245,6 +302,12 @@ function executeAction(action, ...args) {
         draft => {
           executionContext.state = draft;
           result = action(executionContext, ...args);
+
+          if (action.__subscribers) {
+            for (const subscriber of action.__subscribers) {
+              subscriber(executionContext);
+            }
+          }
         },
         true,
         action

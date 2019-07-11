@@ -107,3 +107,43 @@ const App = () => {
 
 render(<App />, document.getElementById("root"));
 ```
+
+## Handling action dispatching
+
+Sometimes you want to listen when specified action is dispatched then do something
+
+```jsx harmony
+import { on } from "react-charm";
+// module user-management
+const SignOutAction = ({ state }) => delete state.accessToken;
+
+// module product
+// we should dispose all product state props
+on(SignOutAction, ({ state }) => delete state.productList);
+```
+
+## API
+
+### setState(nextState:Object)
+
+### getState():Object
+
+### initState(initialState:Object)
+
+### subscribe(subscriber:Function)
+
+### on(action:Function, stateMutator:Function):Function
+
+### on(actions:Function[], stateMutator:Function):Function
+
+### on(\[\[action1:Function, stateMutator1:Function], \[action2:Function, stateMutator2:Function], ...]):Function
+
+### dispatch(action:Function, ....args:Object[])
+
+### useStates(...stateSelector:FunctionOrString[]):Object[]
+
+### useActions(...actions:Function[])
+
+### withStates(stateMap:Object):Function
+
+### withActions(actionMap:Object):Function

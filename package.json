@@ -1,10 +1,11 @@
 {
   "name": "react-charm",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Effortless state management",
   "main": "src/react-charm.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "$publish": "npm publish"
   },
   "keywords": [
     "react",
