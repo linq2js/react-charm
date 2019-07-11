@@ -105,7 +105,16 @@ export function dispatch(action, ...args) {
   return executeAction(action, ...args);
 }
 
-export function getState() {
+export function getState(selectors) {
+  if (selectors) {
+    return Object.entries(selectors).reduce((result, [key, selector]) => {
+      result[key] =
+        typeof selector === "string"
+          ? context.state[selector]
+          : selector(context.state);
+      return result;
+    }, {});
+  }
   return context.state;
 }
 
