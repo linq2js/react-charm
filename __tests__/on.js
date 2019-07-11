@@ -1,4 +1,5 @@
-import { setState, dispatch, on, getState } from "react-charm";
+import { log } from "diff-log";
+import { setState, dispatch, on, getState, subscribe } from "react-charm";
 
 test("All 'on' overloads should work properly", () => {
   setState({
@@ -21,6 +22,10 @@ test("All 'on' overloads should work properly", () => {
 
   on([increase, decrease], ({ state }) => {
     state.counter5 = state.counter1;
+  });
+
+  subscribe((currentState, modifier, prevState) => {
+    log(prevState, currentState);
   });
 
   dispatch(increase);

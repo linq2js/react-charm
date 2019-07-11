@@ -123,11 +123,12 @@ export function setState(nextState, notify = true, modifier) {
     nextState = produce(context.state, nextState);
   }
   if (nextState !== context.state) {
+    const prevState = context.state;
     context.state = nextState;
     // notify change
     if (notify) {
       for (const subscriber of context.subscribers) {
-        subscriber(context.state, modifier);
+        subscriber(context.state, modifier || setState, prevState);
       }
     }
   }
