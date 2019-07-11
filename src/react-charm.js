@@ -109,9 +109,11 @@ export function getState(selectors) {
   if (selectors) {
     return Object.entries(selectors).reduce((result, [key, selector]) => {
       result[key] =
-        typeof selector === "string"
-          ? context.state[selector]
-          : selector(context.state);
+        typeof selector === "function"
+          ? selector(context.state)
+          : selector === true
+          ? context.state[key]
+          : context.state[selector];
       return result;
     }, {});
   }
