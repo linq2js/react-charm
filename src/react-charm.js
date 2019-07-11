@@ -220,7 +220,7 @@ export function withActions(actionMap) {
   };
 }
 
-export default function compose(...functions) {
+export function compose(...functions) {
   if (functions.length === 0) {
     return arg => arg;
   }

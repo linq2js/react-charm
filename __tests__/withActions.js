@@ -1,4 +1,5 @@
-import compose, {
+import {
+  compose,
   withActions,
   getState,
   setState,
