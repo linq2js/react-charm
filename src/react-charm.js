@@ -301,6 +301,10 @@ export function on(...args) {
 }
 
 function executeAction(action, ...args) {
+  if (Array.isArray(action)) {
+    return executeAction(...action.flat(10), ...args);
+  }
+
   if (!context.executionContext) {
     // create new execution context
     const executionContext = (context.executionContext = {
