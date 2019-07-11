@@ -25,7 +25,7 @@ export function diff(a, b) {
           (typeA === "object" || typeA === "function") &&
           (typeB === "object" || typeB === "function")
         ) {
-          const valueDiff = difference(a[key], b[key]);
+          const valueDiff = diff(a[key], b[key]);
           if (valueDiff.changed === "equal") {
             value[key] = {
               changed: "equal",
