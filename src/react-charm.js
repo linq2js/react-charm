@@ -406,6 +406,52 @@ function executeEffect(effect, ...args) {
   );
 }
 
+executeEffect.async = async function(
+  promiseFactory,
+  { stateProp, singleton, onSuccess, onFailure, args = [] } = {}
+) {
+  try {
+    // dont execute twice
+    if (singleton && stateProp && context.state[stateProp].status === "loading")
+      return;
+
+    if (stateProp) {
+      setState(draft => {
+        draft[stateProp] = {
+          status: "loading",
+          loading: true
+        };
+      });
+    }
+
+    const payload = await promiseFactory(...args);
+
+    onSuccess && executeAction(onSuccess, payload);
+
+    if (stateProp) {
+      setState(draft => {
+        draft[stateProp] = {
+          status: "success",
+          success: true,
+          payload
+        };
+      });
+    }
+  } catch (error) {
+    onFailure && executeAction(onFailure, error);
+
+    if (stateProp) {
+      setState(draft => {
+        draft[stateProp] = {
+          status: "failure",
+          failure: true,
+          error
+        };
+      });
+    }
+  }
+};
+
 function getSelector(selector, defaultProp) {
   if (typeof selector === "function") return selector;
   if (selector === true) return getSelector(defaultProp);
