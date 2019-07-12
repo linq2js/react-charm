@@ -3,7 +3,6 @@ import React from "react";
 import { render, fireEvent, cleanup, wait, act } from "@testing-library/react";
 import "test-utils";
 
-
 afterEach(cleanup);
 
 test("should load data properly", async () => {

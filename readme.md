@@ -122,6 +122,27 @@ const SignOutAction = ({ state }) => delete state.accessToken;
 on(SignOutAction, ({ state }) => delete state.productList);
 ```
 
+## Watching state props changes
+
+```jsx harmony
+import { watch } from "react-charm";
+
+watch(
+  state => state.counter,
+  ({ state }) => {
+    console.log("counter changed", state.counter);
+
+    // even you can mutate state
+    // watcher will not be called recursively
+    state.counter++;
+  }
+);
+
+setState({
+  counter: 1
+});
+```
+
 ## API
 
 ### setState(nextState:Object)

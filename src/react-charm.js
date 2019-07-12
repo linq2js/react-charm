@@ -12,9 +12,12 @@ import produce from "immer";
 
 const context = {
   state: {},
-  subscribers: new Set()
+  subscribers: new Set(),
+  watchers: new Set(),
+  prevState: undefined
 };
-const callbackCache = new WeakMap();
+let callbackCache = new WeakMap();
+let cachedSelectors = {};
 const stateProxy = new Proxy(
   {},
   {
@@ -29,6 +32,8 @@ const stateProxy = new Proxy(
     }
   }
 );
+let setStateScopes = 0;
+let shouldNotify = false;
 
 export function useStates(...selectors) {
   const isUnmountRef = useRef(false);
@@ -108,12 +113,7 @@ export function dispatch(action, ...args) {
 export function getState(selectors) {
   if (selectors) {
     return Object.entries(selectors).reduce((result, [key, selector]) => {
-      result[key] =
-        typeof selector === "function"
-          ? selector(context.state)
-          : selector === true
-          ? context.state[key]
-          : context.state[selector];
+      result[key] = getSelector(selector, key)(context.state);
       return result;
     }, {});
   }
@@ -130,23 +130,61 @@ export function initState(state = {}) {
 }
 
 export function setState(nextState, notify = true, modifier) {
-  if (typeof nextState === "function") {
-    nextState = produce(context.state, nextState);
-  }
-  if (nextState !== context.state) {
-    const prevState = context.state;
-    context.state = nextState;
-    // notify change
-    if (notify) {
-      for (const subscriber of context.subscribers) {
-        subscriber(context.state, modifier || setState, prevState);
+  try {
+    setStateScopes++;
+    if (!context.prevState) {
+      context.prevState = context.state;
+    }
+    if (typeof nextState === "function") {
+      // we use same mutation context for all mutator
+      if (context.mutationContext) {
+        nextState = nextState(context.mutationContext);
+      } else {
+        nextState = produce(context.state, draft => {
+          context.mutationContext = draft;
+          nextState(context.mutationContext);
+          callWatchers();
+        });
+      }
+    }
+    if (nextState !== context.state) {
+      context.state = nextState;
+      // notify change
+      if (notify) {
+        shouldNotify = true;
+      }
+
+      callWatchers();
+    }
+  } finally {
+    setStateScopes--;
+    if (!setStateScopes) {
+      delete context.mutationContext;
+      const tempPrevState = context.prevState;
+      delete context.prevState;
+      if (shouldNotify) {
+        shouldNotify = false;
+        for (const subscriber of context.subscribers) {
+          subscriber(context.state, modifier || setState, tempPrevState);
+        }
       }
     }
   }
 }
 
-export function reset(newContext = {}) {
-  Object.assign(context, newContext);
+export function reset() {
+  Object.values(cachedSelectors).forEach(selector => {
+    delete selector.__prevValue;
+  });
+  for (const watcher of context.watchers) {
+    delete watcher.__selectors;
+  }
+  context.state = {};
+  delete context.prevState;
+  context.watchers.clear();
+  context.subscribers.clear();
+  callbackCache = new WeakMap();
+  cachedSelectors = {};
 }
 
 export function subscribe(subscriber) {
@@ -185,9 +223,7 @@ export function withStates(stateMap) {
         ...entries.map(([key, selector]) =>
           typeof selector === "function"
             ? state => selector(state, props)
-            : selector === true
-            ? key
-            : selector
+            : getSelector(selector, key)
         )
       );
       const nextProps = {};
@@ -300,6 +336,18 @@ export function on(...args) {
   };
 }
 
+export function watch(selector, watcher) {
+  context.watchers.add(watcher);
+  if (!watcher.__selectors) {
+    watcher.__selectors = new Set();
+  }
+  if (Array.isArray(selector)) {
+    selector.forEach(item => watcher.__selectors.add(item));
+  } else {
+    watcher.__selectors.add(selector);
+  }
+}
+
 function executeAction(action, ...args) {
   if (Array.isArray(action)) {
     return executeAction(...action.flat(10), ...args);
@@ -317,7 +365,11 @@ function executeAction(action, ...args) {
       setState(
         draft => {
           executionContext.state = draft;
-          result = action(executionContext, ...args);
+          result =
+            // action can be any thing
+            typeof action === "function"
+              ? action(executionContext, ...args)
+              : undefined;
 
           if (action.__subscribers) {
             for (const subscriber of action.__subscribers) {
@@ -337,6 +389,12 @@ function executeAction(action, ...args) {
   return action(context.executionContext, ...args);
 }
 
+export const store = {
+  getState,
+  dispatch,
+  subscribe
+};
+
 function executeEffect(effect, ...args) {
   return effect(
     {
@@ -346,4 +404,37 @@ function executeEffect(effect, ...args) {
     },
     ...args
   );
+}
+
+function getSelector(selector, defaultProp) {
+  if (typeof selector === "function") return selector;
+  if (selector === true) return getSelector(defaultProp);
+  if (selector in cachedSelectors) return cachedSelectors[selector];
+  return (cachedSelectors[selector] = state => state[selector]);
+}
+
+function callWatchers() {
+  if (!context.watchers.size) return;
+  if (context.callingWatchers) return;
+  context.callingWatchers = true;
+  try {
+    setState(draft => {
+      for (const watcher of context.watchers) {
+        let hasChange = false;
+        for (const selector of watcher.__selectors) {
+          const currentValue = selector(draft);
+          if (selector.__prevValue !== currentValue) {
+            hasChange = true;
+            selector.__prevValue = currentValue;
+          }
+        }
+
+        if (hasChange) {
+          executeAction(watcher);
+        }
+      }
+    });
+  } finally {
+    context.callingWatchers = false;
+  }
 }

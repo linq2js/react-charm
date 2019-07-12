@@ -1,3 +1,5 @@
+import { reset } from "react-charm";
+
 const originalError = console.error;
 
 beforeAll(() => {
@@ -12,3 +14,5 @@ beforeAll(() => {
 afterAll(() => {
   console.error = originalError;
 });
+
+afterEach(reset);
