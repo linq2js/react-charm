@@ -112,6 +112,8 @@ export function dispatch(action, ...args) {
 
 export function getState(selectors) {
   if (selectors) {
+    if (typeof selectors === "function") return selectors(context.state);
+
     return Object.entries(selectors).reduce((result, [key, selector]) => {
       result[key] = getSelector(selector, key)(context.state);
       return result;
