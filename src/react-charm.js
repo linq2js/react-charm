@@ -408,7 +408,8 @@ function executeEffect(effect, ...args) {
 
 executeEffect.async = async function(
   promiseFactory,
-  { stateProp, singleton, onSuccess, onFailure, args = [] } = {}
+  { stateProp, singleton, onSuccess, onFailure, args = [] } = {},
+  ...extraArgs
 ) {
   try {
     // dont execute twice
@@ -424,7 +425,7 @@ executeEffect.async = async function(
       });
     }
 
-    const payload = await promiseFactory(...args);
+    const payload = await promiseFactory(...args, ...extraArgs);
 
     onSuccess && executeAction(onSuccess, payload);
 

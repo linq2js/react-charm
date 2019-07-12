@@ -1,6 +1,6 @@
 {
   "name": "react-charm",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "Effortless state management",
   "main": "src/react-charm.js",
   "scripts": {
