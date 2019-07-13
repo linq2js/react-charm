@@ -269,6 +269,57 @@ export function withActions(actionMap) {
   };
 }
 
+export function withDispatch(actions = {}) {
+  if (Array.isArray(actions)) {
+    actions = { one: actions };
+  }
+
+  let { one = [], many = [] } = actions;
+  if (typeof one === "function") {
+    one = [one];
+  }
+
+  if (typeof many === "function") {
+    many = [many];
+  }
+
+  return comp => {
+    const memoizedComp = memo(comp);
+
+    return props => {
+      const prevArgsRef = useRef([]);
+
+      useEffect(() => {
+        one.forEach(action => {
+          executeAction(context => {
+            context.props = props;
+            return executeAction(action);
+          });
+        });
+      }, []);
+
+      useEffect(() => {
+        many.forEach((item, index) => {
+          const [action, argsResolver] = Array.isArray(item) ? item : [item];
+          const currentArgs = argsResolver
+            ? [].concat(argsResolver(props))
+            : undefined;
+          const prevArgs = prevArgsRef.current[index];
+          if (prevArgs && currentArgs && arrayEqual(currentArgs, prevArgs))
+            return;
+          prevArgsRef.current[index] = currentArgs;
+          executeAction(context => {
+            context.props = props;
+            return executeAction(action, ...(currentArgs || []));
+          });
+        });
+      });
+
+      return createElement(memoizedComp, props);
+    };
+  };
+}
+
 export function compose(...functions) {
   if (functions.length === 0) {
     return arg => arg;
@@ -486,4 +537,8 @@ function callWatchers() {
   } finally {
     context.callingWatchers = false;
   }
+}
+
+function arrayEqual(a, b) {
+  return a.length === b.length && a.every((i, index) => i === b[index]);
 }

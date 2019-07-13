@@ -27,7 +27,7 @@ test("should call onFailure action", async () => {
       args: [url]
     });
 
-  await dispatch(action, "https://invalid");
+  await dispatch(action, "https://");
 
   expect(onSuccess.mock.calls.length).toBe(0);
   expect(onFailure.mock.calls.length).toBe(1);

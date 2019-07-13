@@ -16,3 +16,7 @@ afterAll(() => {
 });
 
 afterEach(reset);
+
+export function delayIn(internal) {
+  return new Promise(resolve => setTimeout(resolve, internal));
+}
