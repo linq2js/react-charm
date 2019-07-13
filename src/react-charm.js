@@ -484,7 +484,14 @@ function executeEffect(effect, ...args) {
 
 executeEffect.async = async function(
   promiseFactory,
-  { stateProp, singleton, onSuccess, onFailure, args = [] } = {},
+  {
+    stateProp,
+    transform = x => x,
+    singleton,
+    onSuccess,
+    onFailure,
+    args = []
+  } = {},
   ...extraArgs
 ) {
   try {
@@ -494,10 +501,10 @@ executeEffect.async = async function(
 
     if (stateProp) {
       setState(draft => {
-        draft[stateProp] = {
+        draft[stateProp] = transform({
           status: "loading",
           loading: true
-        };
+        });
       });
     }
 
@@ -507,11 +514,11 @@ executeEffect.async = async function(
 
     if (stateProp) {
       setState(draft => {
-        draft[stateProp] = {
+        draft[stateProp] = transform({
           status: "success",
           success: true,
           payload
-        };
+        });
       });
     }
   } catch (error) {
@@ -519,11 +526,11 @@ executeEffect.async = async function(
 
     if (stateProp) {
       setState(draft => {
-        draft[stateProp] = {
+        draft[stateProp] = transform({
           status: "failure",
           failure: true,
           error
-        };
+        });
       });
     }
   }
