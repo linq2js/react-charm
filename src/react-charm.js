@@ -302,7 +302,7 @@ export function withDispatch(actions = {}) {
         many.forEach((item, index) => {
           const [action, argsResolver] = Array.isArray(item) ? item : [item];
           const currentArgs = argsResolver
-            ? [].concat(argsResolver(props))
+            ? [].concat(argsResolver(props, context.state))
             : undefined;
           const prevArgs = prevArgsRef.current[index];
           if (prevArgs && currentArgs && arrayEqual(currentArgs, prevArgs))
@@ -406,10 +406,18 @@ function executeAction(action, ...args) {
     return executeAction(...action.flat(10), ...args);
   }
 
+  function callActionSubscribers() {
+    if (action.__subscribers) {
+      context.executionContext.type = action;
+      for (const subscriber of action.__subscribers) {
+        subscriber(context.executionContext);
+      }
+    }
+  }
+
   if (!context.executionContext) {
     // create new execution context
     const executionContext = (context.executionContext = {
-      type: action,
       action: executeAction,
       effect: executeEffect
     });
@@ -424,11 +432,7 @@ function executeAction(action, ...args) {
               ? action(executionContext, ...args)
               : undefined;
 
-          if (action.__subscribers) {
-            for (const subscriber of action.__subscribers) {
-              subscriber(executionContext);
-            }
-          }
+          callActionSubscribers();
         },
         true,
         action
@@ -439,7 +443,11 @@ function executeAction(action, ...args) {
     }
   }
 
-  return action(context.executionContext, ...args);
+  try {
+    return action(context.executionContext, ...args);
+  } finally {
+    callActionSubscribers();
+  }
 }
 
 export const store = {
@@ -482,22 +490,63 @@ function executeEffect(effect, ...args) {
   );
 }
 
-executeEffect.async = async function(
-  promiseFactory,
-  {
+/**
+ * async(promise:Promise, onSuccess:Function, onFailure:Function)
+ * async(promise:Promise, stateProp:String)
+ * async(promiseFactory:Function, args:Object[])
+ * async(promiseFactory:Function, options:Object, ...factoryArgs:Object[])
+ * @param inputArgs
+ * @return {Promise<*|*|*|*|undefined>}
+ */
+executeEffect.async = async function async(...inputArgs) {
+  if (typeof inputArgs[0] !== "function" && inputArgs[0] && inputArgs[0].then) {
+    // async(promise, ...)
+    if (typeof inputArgs[1] === "function") {
+      // async(promise, onSuccess, onFailure)
+      return async(() => inputArgs[0], {
+        onSuccess: inputArgs[1],
+        onFailure: inputArgs[2]
+      });
+    }
+
+    if (typeof inputArgs[1] === "string") {
+      // async(promise, stateProp)
+      return async(() => inputArgs[0], { stateProp: inputArgs[1] });
+    }
+    return async(() => inputArgs[0], ...inputArgs.slice(1));
+  }
+
+  if (Array.isArray(inputArgs[1])) {
+    // async(factory, args)
+    return async(inputArgs[0], { args: inputArgs[1] });
+  }
+
+  const [promiseFactory, options, ...extraArgs] = inputArgs;
+
+  let {
     stateProp,
     transform = x => x,
+    payload,
     singleton,
     onSuccess,
     onFailure,
     args = []
-  } = {},
-  ...extraArgs
-) {
+  } = options || {};
+
+  if (payload) {
+    transform = x => x.payload;
+  }
+
   try {
     // dont execute twice
-    if (singleton && stateProp && context.state[stateProp].status === "loading")
+    if (
+      singleton &&
+      stateProp &&
+      context.state[stateProp] &&
+      context.state[stateProp].status === "loading"
+    ) {
       return;
+    }
 
     if (stateProp) {
       setState(draft => {

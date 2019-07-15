@@ -5,11 +5,7 @@ test("should call onSuccess action", async () => {
   const onSuccess = jest.fn();
   const onFailure = jest.fn();
   const action = ({ effect }, url) =>
-    effect.async(fetch, {
-      onSuccess,
-      onFailure,
-      args: [url]
-    });
+    effect.async(fetch(url), onSuccess, onFailure);
 
   await dispatch(action, "https://api.myjson.com/bins/vrtvf");
 
@@ -21,11 +17,7 @@ test("should call onFailure action", async () => {
   const onSuccess = jest.fn();
   const onFailure = jest.fn();
   const action = ({ effect }, url) =>
-    effect.async(fetch, {
-      onSuccess,
-      onFailure,
-      args: [url]
-    });
+    effect.async(fetch(url), onSuccess, onFailure);
 
   await dispatch(action, "https://");
 
@@ -35,10 +27,7 @@ test("should call onFailure action", async () => {
 
 test("should update state prop", async () => {
   const action = ({ effect }, url) =>
-    effect.async(url => fetch(url).then(res => res.json()), {
-      stateProp: "data",
-      args: [url]
-    });
+    effect.async(fetch(url).then(res => res.json()), "data");
 
   const promise = dispatch(action, "https://api.myjson.com/bins/vrtvf");
 
